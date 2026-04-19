@@ -3,5 +3,17 @@ name = "prod-ia-unne"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.6"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = [
+    "funcy>=2.0",
+    "matplotlib>=3.10.8",
+    "netcdf4>=1.7.4",
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "pycocotools>=2.0.11",
+    "rasterio>=1.5.0",
+    "scikit-learn>=1.8.0",
+    "scikit-multilearn>=0.2.0",
+    "tqdm>=4.67.3",
+    "xarray>=2026.4.0",
+]

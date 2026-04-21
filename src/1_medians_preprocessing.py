@@ -314,7 +314,7 @@ if __name__ == '__main__':
     out_path = Path(args.out_path)
     root_coco_path = Path(args.root_coco_path)
 
-    medians_dtype = np.float32
+    medians_dtype = np.float16
     label_dtype = np.int16
 
     if args.bands is None:

@@ -42,10 +42,19 @@ def process_patch(out_path, mode, num_buckets, data_path, bands, padded_patch_he
     # Nombre base sin la banda: ej. 2019_31TCG_patch_21_17
     base_name = "_".join(file_path.stem.split('_')[:-1])
 
-    # Calculate medians
-    medians = get_medians(patch_data_dir, base_name, 0, num_buckets, group_freq, bands,
-                          padded_patch_height, padded_patch_width, output_size,
-                          pad_top, pad_bot, pad_left, pad_right, medians_dtype)
+    try:
+        # Calculate medians
+        medians = get_medians(patch_data_dir, base_name, 0, num_buckets, group_freq, bands,
+                              padded_patch_height, padded_patch_width, output_size,
+                              pad_top, pad_bot, pad_left, pad_right, medians_dtype)
+
+        # Extraemos labels aquí adentro también, por si el archivo _labels.nc es el corrupto
+        labels = get_labels(patch_data_dir, base_name, output_size, pad_top, pad_bot, pad_left, pad_right)
+
+    except Exception as e:
+        # Si un archivo está roto, lo reportamos y salimos de la función sin crashear el programa entero
+        print(f"\n[WARNING] Saltando el parche {patch_id} por archivo corrupto: {e}")
+        return
 
     num_bins, num_bands = medians.shape[:2]
 
@@ -176,6 +185,9 @@ def get_medians(patch_data_dir, base_name, start_bin, window, group_freq, bands,
 
         # Convertir de vuelta a NumPy
         band_data_np = da.values
+
+        # Cortar valores extremos (como NoData=65535) para que entren bien en float16 (max 65504)
+        band_data_np = np.clip(band_data_np, -65500, 65500)
 
         # Calcular el ratio dinámicamente dividiendo el tamaño objetivo (IMG_SIZE) por el ancho actual de la banda
         expand_ratio = IMG_SIZE // band_data_np.shape[1]

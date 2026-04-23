@@ -51,6 +51,7 @@ class PADDataset(Dataset):
             compression: str = 'gzip',
             group_freq: str = '1MS',
             saved_medians: bool = False,
+            medians_path: Union[str, Path] = None,
             linear_encoder: dict = None,
             prefix: str = None,
             window_len: int = 12,
@@ -220,7 +221,13 @@ class PADDataset(Dataset):
         self.num_buckets = len(pd.date_range(start=f'2020-01-01', end=f'2021-01-01', freq=self.group_freq)) - 1
 
         self.saved_medians = saved_medians
-        self.medians_dir = Path(f'logs/medians/{prefix}_medians_{group_freq}_{"".join(self.bands)}/{mode}')
+        # Lógica nueva:
+        if medians_path is not None:
+        # Usa tu directorio limpio, concatenando solo la partición (train/val/test)
+            self.medians_dir = Path(medians_path) / mode
+        else:
+            # Mantiene el comportamiento legacy por si alguien más corre el código sin el flag
+            self.medians_dir = Path(f'logs/medians/{prefix}_medians_{group_freq}_{"".join(self.bands)}/{mode}')
 
 
     def get_padding_offset(self):

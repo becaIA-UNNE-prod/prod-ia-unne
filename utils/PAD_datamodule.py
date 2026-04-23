@@ -31,6 +31,7 @@ class PADDataModule(pl.LightningDataModule):
             compression: str = 'gzip',
             group_freq: str = '1MS',
             saved_medians: bool = False,
+            medians_path: Union[str, Path] = None,  # <-- AGREGADO
             linear_encoder: dict = None,
             prefix: str = None,
             window_len: int = 12,
@@ -72,6 +73,8 @@ class PADDataModule(pl.LightningDataModule):
         saved_medians: boolean, default False
             Whether to precompute and save all medians. This saves on computation
             time during batching.
+        medians_path: Path or str, default None
+            The custom path where precomputed medians are stored.
         linear_encoder: dict, default None
             Maps arbitrary crop_ids to range 0-len(unique(crop_id)).
         prefix: str, default None
@@ -129,6 +132,7 @@ class PADDataModule(pl.LightningDataModule):
         self.bands = bands
         self.linear_encoder = linear_encoder
         self.saved_medians = saved_medians
+        self.medians_path = medians_path
         self.window_len = window_len
         self.fixed_window = fixed_window
         self.requires_norm = requires_norm
@@ -195,6 +199,7 @@ class PADDataModule(pl.LightningDataModule):
                 bands=self.bands,
                 linear_encoder=self.linear_encoder,
                 saved_medians=self.saved_medians,
+                medians_path=self.medians_path,  # <-- AGREGADO
                 window_len=self.window_len,
                 fixed_window=self.fixed_window,
                 requires_norm=self.requires_norm,
@@ -218,6 +223,7 @@ class PADDataModule(pl.LightningDataModule):
                 bands=self.bands,
                 linear_encoder=self.linear_encoder,
                 saved_medians=self.saved_medians,
+                medians_path=self.medians_path,  # <-- AGREGADO
                 window_len=self.window_len,
                 fixed_window=self.fixed_window,
                 requires_norm=self.requires_norm,
@@ -245,6 +251,7 @@ class PADDataModule(pl.LightningDataModule):
                 bands=self.bands,
                 linear_encoder=self.linear_encoder,
                 saved_medians=self.saved_medians,
+                medians_path=self.medians_path,  # <-- AGREGADO
                 window_len=self.window_len,
                 fixed_window=self.fixed_window,
                 requires_norm=self.requires_norm,

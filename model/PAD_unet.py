@@ -233,8 +233,8 @@ class UNet(pl.LightningModule):
         pla_lr_scheduler = {
             'scheduler': lr_scheduler.ReduceLROnPlateau(optimizer,
                                                         factor=0.5,
-                                                        patience=4,
-                                                        verbose=True),
+                                                        patience=4)
+                                                        ,
             'monitor': 'val_loss'
         }
         return [optimizer], [pla_lr_scheduler]
@@ -378,7 +378,7 @@ class UNet(pl.LightningModule):
         return
 
 
-    def training_epoch_end(self, outputs):
+    def on_train_epoch_end(self):
         # Calculate average loss over an epoch
         train_loss = np.nanmean(self.epoch_train_losses)
         self.avg_train_losses.append(train_loss)
@@ -395,7 +395,7 @@ class UNet(pl.LightningModule):
         self.epoch_train_losses = []
 
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         # Calculate average loss over an epoch
         valid_loss = np.nanmean(self.epoch_valid_losses)
         self.avg_val_losses.append(valid_loss)
@@ -409,7 +409,7 @@ class UNet(pl.LightningModule):
         self.epoch_valid_losses = []
 
 
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         self.confusion_matrix = self.confusion_matrix.cpu().detach().numpy()
 
         self.confusion_matrix = self.confusion_matrix[1:, 1:]  # Drop zero label

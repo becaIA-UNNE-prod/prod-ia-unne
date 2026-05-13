@@ -391,11 +391,11 @@ class PADDataset(Dataset):
             patch_info = self.coco.loadImgs(real_patch_id)[0]
             file_path = Path(patch_info['file_name'])
             year = file_path.name.split('_')[0]
-            base_name = "_".join(file_path.stem.split('_')[:-1])
-            label_file_nc = Path(self.root_path_netcdf) / year / file_path.parent / f"{base_name}_labels.nc"
+            tile = file_path.name.split('_')[1]
+            label_file_nc = Path(self.root_path_netcdf) / year / tile / file_path.name
             
             # 2. Leemos la etiqueta directamente del NetCDF
-            labels_full = xr.open_dataset(label_file_nc)['Band1'].values
+            labels_full = xr.open_dataset(label_file_nc, group='labels', decode_times=False)['labels'].values
             
             # --- CORRECCIÓN VITAL: Expandir la etiqueta de 122x122 al tamaño real del parche ---
             import math

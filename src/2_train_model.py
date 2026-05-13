@@ -410,7 +410,7 @@ def main():
             cirrus=args.cirrus,
             shadow=args.shadow,
             snow=args.snow,
-            output_size=(128, 128),
+            output_size=tuple(args.img_size),
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             binary_labels=args.binary_labels,

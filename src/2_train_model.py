@@ -270,7 +270,7 @@ def main():
             crop_encoding[0] = 'Background/Other'
 
             model = ConvLSTM.load_from_checkpoint(resume_from_checkpoint,
-                                                  map_location=torch.device('gpu'),
+                                                  map_location=torch.device('cuda'),
                                                   run_path=run_path,
                                                   linear_encoder=LINEAR_ENCODER,
                                                   crop_encoding=crop_encoding,
@@ -309,7 +309,7 @@ def main():
             crop_encoding[0] = 'Background/Other'
 
             model = ConvSTAR.load_from_checkpoint(resume_from_checkpoint,
-                                                  map_location=torch.device('gpu'),
+                                                  map_location=torch.device('cuda'),
                                                   run_path=run_path,
                                                   linear_encoder=LINEAR_ENCODER,
                                                   crop_encoding=crop_encoding,
@@ -349,7 +349,7 @@ def main():
             crop_encoding[0] = 'Background/Other'
 
             model = UNet.load_from_checkpoint(resume_from_checkpoint,
-                                                  map_location=torch.device('gpu'),
+                                                  map_location=torch.device('cuda'),
                                                   run_path=run_path,
                                                   linear_encoder=LINEAR_ENCODER,
                                                   crop_encoding=crop_encoding,
@@ -373,7 +373,7 @@ def main():
             crop_encoding[0] = 'Background/Other'
 
             model = TempCNN.load_from_checkpoint(args.load_checkpoint,
-                                                 map_location=torch.device('gpu'),
+                                                 map_location=torch.device('cuda'),
                                                  input_dim=3,
                                                  nclasses=n_classes,
                                                  sequence_length=args.window_len,
@@ -410,7 +410,7 @@ def main():
             cirrus=args.cirrus,
             shadow=args.shadow,
             snow=args.snow,
-            output_size=args.img_size,
+            output_size=(128, 128),
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             binary_labels=args.binary_labels,
@@ -436,9 +436,9 @@ def main():
         tb_logger = pl_loggers.TensorBoardLogger(run_path / 'tensorboard')
 
 
-        trainer = pl.Trainer(gpus=args.num_gpus,
+        trainer = pl.Trainer(accelerator='gpu' if args.num_gpus > 0 else 'cpu',
+                             devices=args.num_gpus if args.num_gpus > 0 else 1,
                              num_nodes=args.num_nodes,
-                             progress_bar_refresh_rate=20,
                              min_epochs=1,
                              max_epochs=max_epoch + 1,
                              check_val_every_n_epoch=1,
@@ -446,12 +446,8 @@ def main():
                              callbacks=callbacks,
                              logger=tb_logger,
                              gradient_clip_val=10.0,
-                             # early_stop_callback=early_stopping,
-                             checkpoint_callback=True,
-                             resume_from_checkpoint=resume_from_checkpoint,
                              fast_dev_run=args.devtest,
-                             strategy='ddp' if args.num_gpus > 1 else None,
-                             plugins=None
+                             strategy='ddp' if args.num_gpus > 1 else 'auto',
                              )
 
         # Train model

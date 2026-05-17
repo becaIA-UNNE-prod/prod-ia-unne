@@ -10,7 +10,7 @@ python src/0_data_split.py --how random --data_path=/mnt/yacy_1/prod/christener/
 
 Precomputo medianas. Esto es muy importante para no perder tiempo en el entrenamiento y usar la GPU al 100%.
 ```{python}
-nohup python src/1_medians_preprocessing.py --data=/mnt/yacy_1/prod/christener/S4A --root_coco_path=data/coco_split --prefix=test_1 --out_path=/mnt/yacy_1/prod/ferreyra/S4A/medians --num_workers 24 --bands B02 B03 B04 B08 --output_size 128 128
+nohup python3 src/1_medians_preprocessing.py --data /mnt/yacy_1/prod/ferreyra/S4A_30m --root_coco_path /home1/ferreyra/prod_ia_unne/data/coco_split --out_path /mnt/yacy_1/prod/ferreyra/medians_full --output_size 61 61 --bands B02 B03 B04 B08 --num_workers 4 --group_freq 1MS
 ```
 
 Entreno

@@ -447,7 +447,7 @@ def main():
                              logger=tb_logger,
                              gradient_clip_val=10.0,
                              fast_dev_run=args.devtest,
-                             strategy='ddp' if args.num_gpus > 1 else 'auto',
+                             strategy='ddp' if args.num_gpus > 1 else None,
                              )
 
         # Train model

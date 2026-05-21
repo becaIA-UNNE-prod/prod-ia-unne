@@ -8,10 +8,12 @@ from tqdm.contrib.concurrent import process_map
 from functools import partial
 
 import xarray as xr
+import netCDF4 as nc4
+import cftime
 from pycocotools.coco import COCO
 
 
-IMG_SIZE = 366
+IMG_SIZE = 122
 BANDS = {
     'B02': 10, 'B03': 10, 'B04': 10, 'B08': 10,
     'B05': 20, 'B07': 20, 'B06': 20, 'B8A': 20, 'B11': 20, 'B12': 20,
@@ -82,40 +84,40 @@ def sliding_window_view(arr, window_shape, steps):
     outshape = outshape + arr.shape[:-len(steps)] + tuple(window_shape)
     return as_strided(arr, shape=outshape, strides=strides, writeable=False)
 
-
 def get_medians(patch_data_dir, base_name, start_bin, window, group_freq, bands,
                 padded_patch_height, padded_patch_width, output_size,
                 pad_top, pad_bot, pad_left, pad_right, medians_dtype):
 
     year = base_name.split('_')[0]
     date_range = pd.date_range(start=f'{year}-01-01', end=f'{int(year) + 1}-01-01', freq=group_freq)
+    
+    # Matriz vacía para guardar los resultados
     medians = np.empty((len(bands), window, padded_patch_height, padded_patch_width), dtype=medians_dtype)
 
     nc_file_path = patch_data_dir / f"{base_name}.nc"
 
     for band_id, band in enumerate(bands):
-        # ABRIR EL ARCHIVO INDICANDO EL GRUPO (LA BANDA)
-        ds = xr.open_dataset(nc_file_path, group=band, decode_times=False)
+        # 1. FIX MEMORIA / MULTIPROCESSING: Usar context manager ('with') y motor h5netcdf
+        # (Asegurate de tener instalado 'h5netcdf' con pip install h5netcdf)
+        with xr.open_dataset(nc_file_path, group=band, decode_times=False, engine='netcdf4') as ds:
+            
+            # Extraer los tiempos (esto es súper rápido y no bloquea)
+            with nc4.Dataset(nc_file_path) as src_nc:
+                time_var = src_nc[band]['time']
+                times = pd.DatetimeIndex([
+                    pd.Timestamp(str(t)) for t in
+                    cftime.num2date(time_var[:], time_var.units, time_var.calendar)
+                ])
 
-        # Leer variable time con cftime
-        import netCDF4 as nc4
-        import cftime
-        with nc4.Dataset(nc_file_path) as src_nc:
-            time_var = src_nc[band]['time']
-            times = pd.DatetimeIndex([
-                pd.Timestamp(str(t)) for t in
-                cftime.num2date(time_var[:], time_var.units, time_var.calendar)
-            ])
+            # Manejar la variable de la banda dentro del contexto seguro
+            if band in ds.data_vars:
+                data_3d = ds[band].values
+            else:
+                band_vars = [v for v in ds.data_vars if v.startswith('Band')]
+                band_vars = sorted(band_vars, key=lambda x: int(x.replace('Band', '')))
+                data_3d = np.stack([ds[v].values for v in band_vars], axis=0)
 
-        # La variable tiene el mismo nombre que el grupo (ej: 'B02')
-        if band in ds.data_vars:
-            data_3d = ds[band].values
-        else:
-            # Fallback: buscar variables tipo Band1, Band2...
-            band_vars = [v for v in ds.data_vars if v.startswith('Band')]
-            band_vars = sorted(band_vars, key=lambda x: int(x.replace('Band', '')))
-            data_3d = np.stack([ds[v].values for v in band_vars], axis=0)
-
+        # A partir de acá, el archivo ya está cerrado en disco. Operamos en memoria.
         da = xr.DataArray(
             data_3d,
             dims=['time', 'lat', 'lon'],
@@ -132,27 +134,32 @@ def get_medians(patch_data_dir, base_name, start_bin, window, group_freq, bands,
 
         da = da.resample(time_bins=group_freq).median(dim='time_bins')
         da = da.interpolate_na(dim='time_bins', method='linear', fill_value='extrapolate')
+        
+        # 2. FIX RED NEURONAL: Rellenar NaNs residuales (por ej. si todo el año estuvo nublado en ese píxel)
+        da = da.fillna(0)
+        
         da = da.isel(time_bins=slice(start_bin, start_bin + window))
 
         band_data_np = da.values
-        band_data_np = np.clip(band_data_np, -65500, 65500)
+        
+        # 3. FIX OVERFLOW (FLOAT16): Los valores de reflectancia de Sentinel-2 van de 0 a 10000. 
+        # Clipear en 65500 rompe el float16 si se pasa aunque sea por un decimal.
+        band_data_np = np.clip(band_data_np, 0, 10000)
 
-        expand_ratio = IMG_SIZE // band_data_np.shape[1]
-
-        if expand_ratio > 1:
-            band_data_np = np.repeat(band_data_np, expand_ratio, axis=1)
-            band_data_np = np.repeat(band_data_np, expand_ratio, axis=2)
-
+        # 4. Padding espacial (si hace falta)
         if (output_size[0] < band_data_np.shape[1]) or (output_size[1] < band_data_np.shape[2]):
             band_data_np = np.pad(band_data_np,
                                   pad_width=((0, 0), (pad_top, pad_bot), (pad_left, pad_right)),
                                   mode='constant',
                                   constant_values=0)
 
-        medians[band_id, :, :, :] = np.expand_dims(band_data_np, axis=0)
+        # 5. FIX BROADCASTING NUMPY:
+        # 'medians' espera un shape de (window, height, width). 'band_data_np' ya tiene ese shape.
+        # El np.expand_dims(axis=0) lo volvía (1, window, height, width), lo que tiraba error.
+        medians[band_id, :, :, :] = band_data_np
 
+    # El transpose acomoda a: (window, bands, height, width)
     return medians.transpose(1, 0, 2, 3)
-
 
 def get_labels(patch_data_dir, base_name, output_size, pad_top, pad_bot, pad_left, pad_right):
     nc_file_path = patch_data_dir / f"{base_name}.nc"

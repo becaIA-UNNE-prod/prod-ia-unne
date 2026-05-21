@@ -368,11 +368,22 @@ class PADDataset(Dataset):
             start_month = start_bin
             end_month = start_bin + self.window_len
 
+
         for i, bin_idx in enumerate(range(start_month, end_month)):
-            if bin_idx >= len(median_files):
-                raise IndexError(f"Se intentó acceder al mes {bin_idx}, pero solo hay {len(median_files)} archivos disponibles.")
-            median = np.load(median_files[bin_idx]).astype(self.medians_dtype)
-            medians[i] = median.copy()
+            # Formateamos el número de bin para que coincida con el nombre del archivo (ej: 02, 08)
+            bin_str = f"{bin_idx:02d}"
+            
+            # Construimos el nombre de archivo exacto que deberíamos encontrar
+            expected_file = path / f'sub{padded_id}_bin{bin_str}.npy'
+
+            if expected_file.exists():
+                # Si el archivo existe, lo cargamos
+                median = np.load(expected_file).astype(self.medians_dtype)
+                medians[i] = median.copy()
+            else:
+                # Si el archivo NO existe, rellenamos el paso temporal con ceros
+                # (O puedes usar np.nan, pero los ceros suelen ser más seguros para los tensores de PyTorch)
+                medians[i] = np.zeros((self.num_bands, self.output_size[0], self.output_size[1]), dtype=self.medians_dtype)
 
         # ==========================================================
         # 🩹 AUTO-HEAL: Si falta el label, lo extraemos y lo guardamos

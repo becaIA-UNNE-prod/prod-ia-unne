@@ -28,7 +28,7 @@ LICENSES = [
 # Divisors of the Positive Integer 10980:
 # 1, 2, 3, 4, 5, 6, 9, 10, 12, 15, 18, 20, 30, 36, 45, 60, 61, 90, 122, 180, 183,
 # 244, 305, 366, 549, 610, 732, 915, 1098, 1220, 1830, 2196, 2745, 3660, 5490, 10980
-IMG_SIZE = 366
+IMG_SIZE = 122
 
 # Total pixels for each resolution for Sentinel2 Data
 SENTINEL2_PIXELS = {

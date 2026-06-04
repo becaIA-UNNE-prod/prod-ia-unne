@@ -122,6 +122,8 @@ def main():
     parser.add_argument('--weighted_loss', action='store_true', default=False, required=False,
                             help='Use a weighted loss function with precalculated weights per class. Default False.')
 
+    parser.add_argument('--target_class', type=int, default=None, required=False,
+                             help='Target class for binary classification. E.g. 110 for wheat, 120 for maize.')
     parser.add_argument('--binary_labels', action='store_true', default=False, required=False,
                              help='Map categories to 0 background, 1 parcel. Default False')
 
@@ -226,10 +228,16 @@ def main():
     callbacks = []
     monitor = 'val_loss'
 
-    if args.binary_labels:
+    if args.target_class is not None:
         n_classes = 2
+        ignore_idx = -1
+        LINEAR_ENCODER = {0: 0, 1: 1}
+    elif args.binary_labels:
+        n_classes = 2
+        ignore_idx = -1
     else:
         n_classes = len(list(CROP_ENCODING.values())) + 1
+        ignore_idx = 0
 
     if args.weighted_loss:
         class_weights = {LINEAR_ENCODER[k]: v for k, v in CLASS_WEIGHTS.items()}
@@ -337,10 +345,10 @@ def main():
 
             model = UNet(run_path, LINEAR_ENCODER, learning_rate=init_learning_rate,
                          parcel_loss=args.parcel_loss, class_weights=class_weights,
-                         num_layers=3)
+                         num_layers=3, num_bands=len(args.bands), window_len=args.window_len, ignore_index=ignore_idx)
         else:
             model = UNet(run_path, LINEAR_ENCODER, parcel_loss=args.parcel_loss,
-                         class_weights=class_weights, num_layers=3)
+                         class_weights=class_weights, num_layers=3, num_bands=len(args.bands), window_len=args.window_len, ignore_index=ignore_idx)
 
         if not args.train:
             # Load the model for testing
@@ -414,6 +422,7 @@ def main():
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             binary_labels=args.binary_labels,
+            target_class=args.target_class,
             return_parcels=args.parcel_loss
         )
 
@@ -422,6 +431,8 @@ def main():
         dm.setup('fit')
 
         # DEFAULT CALLBACKS used by the Trainer
+        early_stopping = EarlyStopping('val_loss', patience=5, mode='min', verbose=True)
+        callbacks.append(early_stopping)
         # early_stopping = EarlyStopping('val_loss')
 
         callbacks.append(
@@ -474,6 +485,7 @@ def main():
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             binary_labels=args.binary_labels,
+            target_class=args.target_class,
             return_parcels=args.parcel_loss
         )
 

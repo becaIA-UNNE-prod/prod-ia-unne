@@ -119,7 +119,7 @@ class Up(nn.Module):
 class UNet(pl.LightningModule):
     def __init__(self, run_path, linear_encoder, learning_rate=1e-3, parcel_loss=False,
                  class_weights=None, crop_encoding=None, checkpoint_epoch=None,
-                 num_layers=3):
+                 num_layers=3, num_bands=4, window_len=6, ignore_index=0):
         '''
         Parameters:
         -----------
@@ -171,20 +171,20 @@ class UNet(pl.LightningModule):
             class_weights_tensor = torch.tensor([class_weights[k] for k in sorted(class_weights.keys())]).cuda()
 
             if self.parcel_loss:
-                self.lossfunction = nn.NLLLoss(ignore_index=0, weight=class_weights_tensor, reduction='sum')
+                self.lossfunction = nn.NLLLoss(ignore_index=ignore_index, weight=class_weights_tensor, reduction='sum')
             else:
-                self.lossfunction = nn.NLLLoss(ignore_index=0, weight=class_weights_tensor)
+                self.lossfunction = nn.NLLLoss(ignore_index=ignore_index, weight=class_weights_tensor)
         else:
             if self.parcel_loss:
-                self.lossfunction = nn.NLLLoss(ignore_index=0, reduction='sum')
+                self.lossfunction = nn.NLLLoss(ignore_index=ignore_index, reduction='sum')
             else:
-                self.lossfunction = nn.NLLLoss(ignore_index=0)
+                self.lossfunction = nn.NLLLoss(ignore_index=ignore_index)
 
         self.crop_encoding = crop_encoding
 
         self.run_path = Path(run_path)
 
-        input_channels = 4 * 6   # bands * time steps
+        input_channels = num_bands * window_len   # bands * time steps
 
         # Encoder
         # -------

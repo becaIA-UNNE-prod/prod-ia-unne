@@ -46,6 +46,7 @@ class PADDataModule(pl.LightningDataModule):
             batch_size: int = 64,
             num_workers: int = 4,
             binary_labels: bool = False,
+            target_class: int = None,
             return_parcels: bool = False
     ) -> None:
         '''
@@ -126,6 +127,7 @@ class PADDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.binary_labels = binary_labels
+        self.target_class = target_class
 
         # Initialize parameters required for Patches Dataset
         self.prefix = prefix
@@ -210,6 +212,7 @@ class PADDataModule(pl.LightningDataModule):
                 snow=self.snow,
                 output_size=self.output_size,
                 binary_labels=self.binary_labels,
+                target_class=self.target_class,
                 mode='train',
                 return_parcels=self.return_parcels
             )
@@ -234,6 +237,7 @@ class PADDataModule(pl.LightningDataModule):
                 snow=self.snow,
                 output_size=self.output_size,
                 binary_labels=self.binary_labels,
+                target_class=self.target_class,
                 mode='val',
                 return_parcels=self.return_parcels
         )
@@ -262,6 +266,7 @@ class PADDataModule(pl.LightningDataModule):
                 snow=self.snow,
                 output_size=self.output_size,
                 binary_labels=self.binary_labels,
+                target_class=self.target_class,
                 mode='test',
                 return_parcels=self.return_parcels
             )

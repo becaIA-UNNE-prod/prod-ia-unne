@@ -22,6 +22,7 @@ parser.add_argument('--fixed_window', action='store_true', default=False)
 parser.add_argument('--requires_norm', action='store_true', default=False)
 parser.add_argument('--num_workers', type=int, default=4)
 parser.add_argument('--image_idx', nargs='+', required=False)
+parser.add_argument('--target_class', type=int, default=None)
 args = parser.parse_args()
 
 args.img_size = tuple(map(int, args.img_size))
@@ -31,13 +32,24 @@ run_path = Path(*Path(args.load_checkpoint).parts[:-2])
 checkpoint_epoch = Path(args.load_checkpoint).stem.split('=')[1].split('-')[0]
 print(f'Exportando a: {run_path}')
 
+# Si hay target_class, usar encoder binario
+if hasattr(args, 'target_class') and args.target_class is not None:
+    PLOT_ENCODER = {0: 0, 1: 1}
+    PLOT_ENCODING = {0: 'Background/Other', 1: CROP_ENCODING.get(args.target_class, str(args.target_class))}
+    LINEAR_ENCODER = {0: 0, 1: 1}
+else:
+    PLOT_ENCODER = LINEAR_ENCODER
+    PLOT_ENCODING = {k: v for k, v in CROP_ENCODING.items() if k in LINEAR_ENCODER}
+
 model = UNet.load_from_checkpoint(
     args.load_checkpoint,
     map_location=torch.device('cpu'),
     run_path=run_path,
     linear_encoder=LINEAR_ENCODER,
     checkpoint_epoch=checkpoint_epoch,
-    num_layers=3
+    num_layers=3,
+    num_bands=len(args.bands),
+    window_len=args.window_len
 )
 
 dm = PADDataModule(
@@ -46,7 +58,7 @@ dm = PADDataModule(
     group_freq='1MS',
     prefix=None,
     bands=args.bands,
-    linear_encoder=LINEAR_ENCODER,
+    linear_encoder=PLOT_ENCODER,
     saved_medians=True,
     medians_path=Path(args.medians_path),
     window_len=args.window_len,
@@ -58,7 +70,8 @@ dm = PADDataModule(
     batch_size=1,
     num_workers=args.num_workers,
     binary_labels=False,
-    return_parcels=False
+    return_parcels=False,
+    target_class=args.target_class
 )
 dm.setup('test')
 model.cuda()
@@ -78,7 +91,7 @@ for image_id in image_idx:
 
     for idx in range(num_subpatches[0] * num_subpatches[1]):
         batch = dm.dataset_test.__getitem__(subpatch_id + idx)
-        im = grid1[idx].imshow(batch['labels'].squeeze(), vmin=0, vmax=max(LINEAR_ENCODER.values()), cmap='tab20')
+        im = grid1[idx].imshow(batch['labels'].squeeze(), vmin=0, vmax=max(PLOT_ENCODER.values()), cmap='tab20')
         grid1[idx].set_axis_off()
 
         inputs = batch['medians'][None, :, :, :, :]
@@ -89,15 +102,12 @@ for image_id in image_idx:
             pred = model(inputs).to(torch.float32)
 
         pred_sparse = pred.argmax(axis=1).squeeze().cpu().numpy()
-        grid2[idx].imshow(pred_sparse, vmin=0, vmax=max(LINEAR_ENCODER.values()), cmap='tab20')
+        grid2[idx].imshow(pred_sparse, vmin=0, vmax=max(PLOT_ENCODER.values()), cmap='tab20')
         grid2[idx].set_axis_off()
 
-    crop_encoding_rev = {v: k for k, v in CROP_ENCODING.items()}
-    crop_encoding = {k: crop_encoding_rev[k] for k in LINEAR_ENCODER.keys() if k != 0}
-    crop_encoding[0] = 'Background/Other'
-    crop_ids = sorted(LINEAR_ENCODER.keys())
-    colors = [im.cmap(im.norm(LINEAR_ENCODER[c])) for c in crop_ids]
-    patches = [mpatches.Patch(color=colors[LINEAR_ENCODER[c]], label=f'{c} ({crop_encoding[c]})') for c in crop_ids]
+    crop_ids = sorted(PLOT_ENCODER.keys())
+    colors = [im.cmap(im.norm(PLOT_ENCODER[c])) for c in crop_ids]
+    patches = [mpatches.Patch(color=colors[PLOT_ENCODER[c]], label=f'{c} ({PLOT_ENCODING.get(c, str(c))})') for c in crop_ids]
     axes[1].legend(handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='x-large')
 
     for ax in axes:

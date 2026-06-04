@@ -64,6 +64,7 @@ class PADDataset(Dataset):
             snow: bool = True,
             output_size: tuple = None,
             binary_labels: bool = False,
+            target_class: int = None,
             mode: str = None,
             return_parcels: bool = False
     ) -> None:
@@ -147,6 +148,7 @@ class PADDataset(Dataset):
         self.bands = sorted(bands)
         self.num_bands = len(self.bands)
         self.binary_labels = binary_labels
+        self.target_class = target_class
 
         self.return_masks = return_masks
         self.masks = {}
@@ -561,7 +563,9 @@ class PADDataset(Dataset):
                     parcels = labels != 0
                     out['parcels'] = parcels
 
-                if self.binary_labels:
+                if self.target_class is not None:
+                    labels = (labels == self.target_class).astype(int)
+                elif self.binary_labels:
                     # Map 0: background class, 1: parcel
                     labels[labels != 0] = 1
                 else:

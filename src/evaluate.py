@@ -32,14 +32,17 @@ run_path = Path(*Path(args.load_checkpoint).parts[:-2])
 checkpoint_epoch = Path(args.load_checkpoint).stem.split('=')[1].split('-')[0]
 print(f'Exportando a: {run_path}')
 
-# Si hay target_class, usar encoder binario
+crop_encoding_rev = {v: k for k, v in CROP_ENCODING.items()}
+
+# Si hay target_class, usar encoder binario {0: background, 1: target}
 if hasattr(args, 'target_class') and args.target_class is not None:
     PLOT_ENCODER = {0: 0, 1: 1}
-    PLOT_ENCODING = {0: 'Background/Other', 1: CROP_ENCODING.get(args.target_class, str(args.target_class))}
+    PLOT_ENCODING = {0: 'Background/Other', 1: crop_encoding_rev.get(args.target_class, str(args.target_class))}
     LINEAR_ENCODER = {0: 0, 1: 1}
 else:
     PLOT_ENCODER = LINEAR_ENCODER
-    PLOT_ENCODING = {k: v for k, v in CROP_ENCODING.items() if k in LINEAR_ENCODER}
+    PLOT_ENCODING = {crop_id: crop_encoding_rev.get(crop_id, 'Background/Other') for crop_id in LINEAR_ENCODER.keys()}
+    PLOT_ENCODING[0] = 'Background/Other'
 
 model = UNet.load_from_checkpoint(
     args.load_checkpoint,

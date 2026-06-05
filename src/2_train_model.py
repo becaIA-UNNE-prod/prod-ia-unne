@@ -236,8 +236,8 @@ def main():
         n_classes = 2
         ignore_idx = -1
     else:
-        n_classes = len(list(CROP_ENCODING.values())) + 1
-        ignore_idx = 0
+        n_classes = len(set(LINEAR_ENCODER.values()))
+        ignore_idx = -1
 
     if args.weighted_loss:
         class_weights = {LINEAR_ENCODER[k]: v for k, v in CLASS_WEIGHTS.items()}

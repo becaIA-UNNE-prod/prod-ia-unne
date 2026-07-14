@@ -6,11 +6,53 @@ Es importante ver `utils/coco_tools.py`
 
 ## Descripción General
 
-El script permite realizar particiones de dos formas:
-1.  **Estratificada:** Asegura que la distribución de etiquetas en cada subconjunto sea proporcional a la del dataset original, utilizando un enfoque multietiqueta a nivel de imagen.
-2.  **Aleatoria:** Realiza una división simple al azar.
+El script permite realizar particiones de tres formas:
+1.  **Estratificada (`stratified`):** Asegura que la distribución de etiquetas en cada subconjunto sea proporcional a la del dataset original, utilizando un enfoque multietiqueta a nivel de imagen (patch).
+2.  **Aleatoria (`random`):** Realiza una división simple al azar a nivel de patch.
+3.  **Group-stratified (`group_stratified`):** pensada para el dataset de Córdoba (maíz), donde el número de tiles crece continuamente. Ver sección dedicada más abajo.
 
-Además, el script gestiona la compatibilidad de etiquetas entre diferentes regiones geográficas (Cataluña y Francia) y años, permitiendo experimentos de generalización.
+Los modos `stratified` y `random` son legacy del dataset original (Sen4AgriNet, Cataluña/Francia) y gestionan la compatibilidad de etiquetas entre esas dos regiones vía `--experiment`. **No usar `--experiment` para el dataset de Córdoba**, ya que las listas de tiles están hardcodeadas a Cataluña/Francia y no aplican.
+
+---
+
+## Modo `group_stratified` (recomendado para Córdoba / datasets que crecen en tiles)
+
+Los otros dos modos particionan a nivel de **patch individual**. Como los patches son sub-recortes espaciales contiguos dentro de un mismo tile (`{year}_{tile}_patch_{row}_{col}.nc`), un split random o estratificado a nivel de patch mezcla patches vecinos del mismo tile entre train/val/test. Esto es data leakage espacial: patches adyacentes comparten campo, nubosidad y fecha de imagen, así que el modelo puede "memorizar" el tile en vez de generalizar, e infla las métricas de val/test.
+
+`group_stratified` resuelve esto particionando por **grupo `(tile, year)`**: todos los sub-patches de un mismo tile-año van siempre al mismo split. Además:
+
+- **Estratifica por prevalencia de la clase objetivo** (maíz): los grupos se bucketizan según el % de patches que contienen maíz, para que train/val/test mantengan un balance de clase similar.
+- **Asignación incremental y estable**: una vez que un grupo (tile-año) fue asignado a un split, nunca se mueve. Al bajar tiles nuevos, sólo se asignan los grupos nuevos (al split que más los necesite para acercarse al ratio pedido), así las métricas siguen siendo comparables entre corridas a medida que el dataset crece.
+
+### Paso previo: catálogo de patches
+
+`group_stratified` necesita un catálogo (csv) con metadata liviana por patch (tile, año, si contiene maíz). Se genera/actualiza con:
+
+```bash
+python src/0a_build_patch_catalog.py \
+    --data_path /mnt/yacy_1/prod/christener/S4A \
+    --catalog_path data/patch_catalog.csv \
+    --num_workers 8
+```
+
+Sólo lee el grupo `labels` de cada `.nc` (no las bandas espectrales), y es **incremental**: si se corre de nuevo después de bajar tiles nuevos, sólo procesa los archivos que todavía no están en el catálogo.
+
+### Correr el split
+
+```bash
+python src/0_data_split.py \
+    --how group_stratified \
+    --data_path /mnt/yacy_1/prod/christener/S4A \
+    --coco_path data/coco_split \
+    --prefix test_2 \
+    --ratio 60 20 20 \
+    --catalog_path data/patch_catalog.csv \
+    --assignments_path data/coco_split/test_2_group_assignments.json
+```
+
+`--assignments_path` guarda el mapeo `tile_year -> split`. Si el archivo ya existe, esos grupos quedan fijos y sólo se agregan los tile-años nuevos presentes en el catálogo. Para "congelar" un split existente y simplemente extenderlo con tiles nuevos, basta con reutilizar el mismo `--assignments_path`.
+
+`--n_buckets` (default 3) controla cuántos buckets de prevalencia de maíz se usan para estratificar; se reduce automáticamente si hay pocos grupos o muchos empates (por ejemplo, muchos tile-años con 0% de maíz).
 
 ---
 

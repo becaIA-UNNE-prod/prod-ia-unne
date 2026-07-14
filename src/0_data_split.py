@@ -28,7 +28,7 @@ from utils.coco_tools import create_coco_dataframe, create_coco_netcdf
 from utils.settings.mappings.mappings_cat import SAMPLE_TILES as CAT_TILES
 from utils.settings.mappings.mappings_fr import SAMPLE_TILES as FR_TILES
 from utils.settings.mappings.encodings_en import CROP_ENCODING
-from utils.settings.config import LINEAR_ENCODER
+from utils.settings.config import LINEAR_ENCODER, RANDOM_SEED
 
 from sklearn.preprocessing import MultiLabelBinarizer
 from skmultilearn.model_selection.iterative_stratification import IterativeStratification
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--how', type=str, required=True, help='Perform a stratified split.',
-                        choices=['stratified', 'random'])
+                        choices=['stratified', 'random', 'group_stratified'])
     parser.add_argument('--data_path', type=str, default='dataset/netcdf/', required=False,
                         help='The path containing the data in netCDF format. Default "dataset/netcdf/".')
     parser.add_argument('--coco_path', type=str, default='coco_files/', required=False,
@@ -127,11 +127,23 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=None, required=False,
                         help='The seed to use for random patch selection. Defauly None (random).')
 
+    parser.add_argument('--catalog_path', type=str, default='data/patch_catalog.csv', required=False,
+                        help='[group_stratified] Path to the incremental patch catalog produced by \
+                        src/0a_build_patch_catalog.py. Default "data/patch_catalog.csv".')
+    parser.add_argument('--assignments_path', type=str, default=None, required=False,
+                        help='[group_stratified] Path to the persistent tile-year -> split assignments \
+                        JSON. Groups already present here are never reassigned. Defaults to \
+                        "<coco_path>/<prefix>_group_assignments.json".')
+    parser.add_argument('--n_buckets', type=int, default=3, required=False,
+                        help='[group_stratified] Number of target-class-prevalence buckets to \
+                        stratify tile-year groups by. Default 3.')
+
     args = parser.parse_args()
 
     # Define paths
     data_path = Path(args.data_path)
     coco_path = Path(args.coco_path)
+    coco_path.mkdir(parents=True, exist_ok=True)
 
     # Ignore tile/year filtering in case an explicit experiment scheme is selected
     if args.experiment is not None:
@@ -290,6 +302,36 @@ if __name__ == '__main__':
                            common_labels=common_lbls,
                            num_patches=args.num_patches
                            )
+
+    elif args.how == 'group_stratified':
+        # Group-stratified split: the split unit is a (tile, year) group, not
+        # an individual patch, so all sub-patches of a tile-year always end
+        # up in the same set (no spatial leakage between neighboring
+        # patches). Groups are bucketed by target-class prevalence to keep
+        # class balance across sets, and assignment is incremental/stable:
+        # groups assigned in a previous run are never moved, only new
+        # tile-years get assigned. See utils/split_tools.py and
+        # doc/0_data_split.md for the full rationale.
+        from utils.split_tools import (
+            load_catalog, compute_group_prevalence, bucketize_prevalence,
+            load_assignments, save_assignments, assign_new_groups,
+            export_coco_from_catalog,
+        )
+
+        assignments_path = Path(args.assignments_path) if args.assignments_path \
+            else coco_path / f'{prefix}_group_assignments.json'
+
+        seed = args.seed if args.seed is not None else RANDOM_SEED
+
+        catalog = load_catalog(args.catalog_path)
+        group_df = compute_group_prevalence(catalog)
+        group_df = bucketize_prevalence(group_df, n_buckets=args.n_buckets)
+
+        assignments = load_assignments(assignments_path)
+        assignments = assign_new_groups(group_df, assignments, ratio=(train_r, val_r, test_r), seed=seed)
+        save_assignments(assignments_path, assignments)
+
+        export_coco_from_catalog(catalog, assignments, coco_path, prefix)
 
     # Plot label distributions of the produced files.
     if args.plot_distros:

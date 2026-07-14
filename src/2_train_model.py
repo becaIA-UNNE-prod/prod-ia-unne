@@ -102,6 +102,7 @@ def create_model_log_path(log_path, prefix, model):
 
 
 def main():
+    global LINEAR_ENCODER
     # Parse user arguments
     parser = argparse.ArgumentParser()
 
